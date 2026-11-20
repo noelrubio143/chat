@@ -1,0 +1,9 @@
+{
+  "name": "chat",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "vars": { "ORIGIN": "https://noelrubio143.github.io" },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "chat", "database_id": "PALITAN_NG_ID_NG_D1" }
+  ]
+}
