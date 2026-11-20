@@ -2,7 +2,7 @@
   "name": "chat",
   "main": "worker.js",
   "compatibility_date": "2026-11-01",
-  "vars": { "ORIGIN": "https://noelrubio143.github.io" },
+  "vars": { "ORIGIN": "https://noelrubio143.github.io/chat" },
   "d1_databases": [
     {
       "binding": "DB",
