@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apps</title>
+<style>
+:root{
+  --bg:#f2f5f3; --ink:#12211c; --muted:#5b6b64; --card:#ffffff; --line:#d9e1dd;
+  --accent:#0f7b6c; --accent-ink:#ffffff; --mine:#0f7b6c; --mine-ink:#ffffff; --theirs:#e7eeea;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1714; --ink:#e6efeb; --muted:#8fa39a; --card:#16231f; --line:#27382f;
+    --accent:#3fc3ad; --accent-ink:#06211c; --mine:#2a9d8a; --mine-ink:#04201b; --theirs:#1f2f2a;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:48px 20px 120px}
+h1{font-size:1.75rem;margin:0 0 8px}
+p.lead{color:var(--muted);margin:0}
+
+/* ====== CHAT WIDGET: copy from here to the end of the script into any page ====== */
+#chat-btn{position:fixed;right:16px;bottom:16px;z-index:50;border:0;border-radius:999px;padding:14px 20px;
+  background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+#chat-panel{position:fixed;right:16px;bottom:16px;z-index:60;width:min(380px,calc(100vw - 32px));height:min(560px,calc(100dvh - 32px));
+  display:none;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;
+  box-shadow:0 12px 40px rgba(0,0,0,.3)}
+#chat-panel.open{display:flex}
+#chat-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line)}
+#chat-head strong{font-size:1rem}
+#chat-head small{display:block;color:var(--muted);font-size:.8rem}
+#chat-close{border:0;background:none;color:var(--muted);font-size:1.4rem;line-height:1;cursor:pointer;padding:4px 8px}
+#chat-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:82%;padding:9px 12px;border-radius:14px;word-wrap:break-word;white-space:pre-wrap}
+.msg.me{align-self:flex-end;background:var(--mine);color:var(--mine-ink);border-bottom-right-radius:4px}
+.msg.them{align-self:flex-start;background:var(--theirs);border-bottom-left-radius:4px}
+.note{color:var(--muted);font-size:.9rem;text-align:center;margin:auto 0}
+#chat-form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+#chat-input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg);color:var(--ink);font:inherit}
+#chat-send{border:0;border-radius:10px;padding:0 16px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;cursor:pointer}
+#chat-send:disabled{opacity:.5;cursor:default}
+#chat-btn:focus-visible,#chat-send:focus-visible,#chat-close:focus-visible,#chat-input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+  <h1>My apps</h1>
+  <p class="lead">Questions or a bug to report? Tap Chat and send a message.</p>
+</main>
+
+<button id="chat-btn" type="button" aria-controls="chat-panel" aria-expanded="false">Chat</button>
+<section id="chat-panel" role="dialog" aria-label="Chat">
+  <div id="chat-head">
+    <div><strong>Chat with us</strong><small>We reply when we are online.</small></div>
+    <button id="chat-close" type="button" aria-label="Close chat">&times;</button>
+  </div>
+  <div id="chat-log" aria-live="polite"></div>
+  <form id="chat-form" autocomplete="off">
+    <input id="chat-input" type="text" maxlength="500" placeholder="Write a message" aria-label="Message">
+    <button id="chat-send" type="submit">Send</button>
+  </form>
+</section>
+
+<script>
+(function(){
+  // Your proxy URL (for example a Cloudflare Worker). NEVER put a GitHub token in this file:
+  // everything on GitHub Pages is public. The proxy keeps the token as a secret.
+  var ENDPOINT = "https://chat2.amber2.workers.dev";
+  var POLL_MS = 15000;
+
+  var $ = function(id){ return document.getElementById(id); };
+  var btn=$("chat-btn"), panel=$("chat-panel"), log=$("chat-log"), form=$("chat-form"), input=$("chat-input"), send=$("chat-send");
+  var timer=null, shown=0;
+
+  function uid(){
+    try{
+      var u=localStorage.getItem("chat_uid");
+      if(!u){ u=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2)); localStorage.setItem("chat_uid",u); }
+      return u;
+    }catch(e){ return "guest"; }
+  }
+  var USER = uid();
+
+  function note(text){ log.innerHTML=""; var d=document.createElement("div"); d.className="note"; d.textContent=text; log.appendChild(d); shown=0; }
+
+  function render(list){
+    if(!list.length){ note("No messages yet. Say hi and ask your question."); return; }
+    var stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 40;
+    log.innerHTML="";
+    list.forEach(function(m){
+      var d=document.createElement("div");
+      d.className="msg "+(m.from==="me"?"me":"them");
+      d.textContent=m.text; // textContent: never insert messages as HTML
+      log.appendChild(d);
+    });
+    if(stick || list.length!==shown) log.scrollTop=log.scrollHeight;
+    shown=list.length;
+  }
+
+  function load(){
+    if(!ENDPOINT){ note("Chat is not connected yet. Set ENDPOINT in index.html."); return Promise.resolve(); }
+    return fetch(ENDPOINT+"?u="+encodeURIComponent(USER),{cache:"no-store"})
+      .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+      .then(render)
+      .catch(function(){ if(!shown) note("Could not load messages. Check your connection and try again."); });
+  }
+
+  function open(){
+    panel.classList.add("open"); btn.style.display="none"; btn.setAttribute("aria-expanded","true");
+    load(); timer=setInterval(function(){ if(!document.hidden) load(); }, POLL_MS); input.focus();
+  }
+  function close(){
+    panel.classList.remove("open"); btn.style.display=""; btn.setAttribute("aria-expanded","false");
+    clearInterval(timer); timer=null; btn.focus();
+  }
+  btn.addEventListener("click",open);
+  $("chat-close").addEventListener("click",close);
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape" && panel.classList.contains("open")) close(); });
+
+  form.addEventListener("submit",function(e){
+    e.preventDefault();
+    var text=input.value.trim();
+    if(!text) return;
+    if(!ENDPOINT){ note("Chat is not connected yet. Set ENDPOINT in index.html."); return; }
+    send.disabled=true;
+    fetch(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({u:USER,text:text})})
+      .then(function(r){ if(!r.ok) throw new Error(r.status); input.value=""; return load(); })
+      .catch(function(){
+        var d=document.createElement("div"); d.className="note"; d.textContent="Message not sent. Try again.";
+        log.appendChild(d); log.scrollTop=log.scrollHeight;
+      })
+      .then(function(){ send.disabled=false; input.focus(); });
+  });
+})();
+</script>
+</body>
+</html>
